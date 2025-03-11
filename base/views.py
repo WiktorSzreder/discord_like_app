@@ -1,3 +1,5 @@
+from pydoc_data.topics import topics
+
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
 from django.shortcuts import render, redirect
@@ -72,11 +74,15 @@ def home(request):
     topics = Topic.objects.all()
     room_count = rooms.count()
 
-    context = {'rooms': rooms, 'topics': topics, 'room_count': room_count}
+    room_messages = Message.objects.filter(
+        Q(room__topic__name__icontains=q)
+    )
+
+    context = {'rooms': rooms, 'topics': topics, 'room_count': room_count, 'room_messages': room_messages}
     return render(request, 'base/home.html', context) #context send data on template in this case - context=rooms(list of dictionaries)
 def room(request, pk):
     room = Room.objects.get(id=pk)
-    room_messages = room.message_set.all().order_by('-created')
+    room_messages = room.message_set.all()
 
     participants = room.participants.all()
 
@@ -92,30 +98,49 @@ def room(request, pk):
 
     context = {'room': room, 'room_messages': room_messages, 'participants': participants}
     return render(request, 'base/room.html',context)
+
+def userProfile(request, pk):
+    user = User.objects.get(pk=pk)
+    rooms = user.room_set.all()
+    room_messages = user.message_set.all()
+    topics = Topic.objects.all()
+    context = {'user': user, 'rooms': rooms, 'room_messages': room_messages, 'topics': topics}
+    return render(request, 'base/profile.html', context)
+
 @login_required(login_url='login')
 def createRoom(request):
     form = RoomForm()
+    topics = Topic.objects.all()
     if request.method == 'POST':
-        form = RoomForm(request.POST)
-        if form.is_valid():
-            form.save()
-            return redirect('home')
-    context = {'form': form}
+        topic_name = request.POST.get('topic')
+        topic, created = Topic.objects.get_or_create(name=topic_name)
+        Room.objects.create(
+            host =  request.user,
+            topic = topic,
+            name = request.POST.get('name'),
+            description = request.POST.get('description')
+        )
+        return redirect('home')
+    context = {'form': form, 'topics': topics}
     return render(request, 'base/room_form.html',context)
 @login_required(login_url='login')
 def updateRoom(request, pk):
     room = Room.objects.get(id=pk)
     form = RoomForm(instance=room)
-
+    topics = Topic.objects.all()
     if request.user != room.host:
         return HttpResponse('You do not have permission')
 
     if request.method == 'POST':
-        form = RoomForm(request.POST, instance=room)
-        if form.is_valid():
-            form.save()
-            return redirect('home')
-    context = {'form': form}
+        topic_name = request.POST.get('topic')
+        topic, created = Topic.objects.get_or_create(name=topic_name)
+        room.name = request.POST.get('name')
+        room.topic = topic
+        room.description = request.POST.get('description')
+        room.save()
+
+        return redirect('home')
+    context = {'form': form, 'topics': topics, 'room': room}
     return render(request, 'base/room_form.html',context)
 @login_required(login_url='login')
 def deleteRoom(request, pk):
