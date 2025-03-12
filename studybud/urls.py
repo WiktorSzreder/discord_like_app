@@ -21,5 +21,6 @@ from django.urls import path, include
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('',include('base.urls')), #Connect to base \ urls.py Where are stored diffrent path to files (In specific app called base)
+    path('api/' , include('base.api.urls')),
 
 ]
